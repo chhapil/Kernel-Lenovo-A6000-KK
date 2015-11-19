@@ -1,0 +1,78 @@
+/* Copyright (c) 2014, The Linux Foundation. All rights reserved.                                      
+ *                                                                                                     
+ * This program is free software; you can redistribute it and/or modify                                
+ * it under the terms of the GNU General Public License version 2 and                                  
+ * only version 2 as published by the Free Software Foundation.                                        
+ *                                                                                                     
+ * This program is distributed in the hope that it will be useful,                                     
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of                                      
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                                       
+ * GNU General Public License for more details.                                                        
+ */                                                                                                    
+                                                                                                       
+/dts-v1/;                                                                                              
+                                                                                                       
+#include "msm8916-qrd-skum.dtsi"                                                                       
+#include "msm8916-memory.dtsi"                                                                         
+                                                                                                       
+/ {                                                                                                    
+	model = "Qualcomm Technologies, Inc. MSM 8916 QRD SKUM";                                              
+	compatible = "qcom,msm8916-qrd-skum", "qcom,msm8916-qrd", "qcom,msm8916", "qcom,qrd";                 
+	qcom,board-id = <0x1010b 7>;                                                                          
+};                                                                                                     
+
+/*
+&soc {                                                                                                 
+	i2c@78b8000 {                                                                                         
+		smb1360_otg_supply: smb1360-chg-fg@14 {                                                             
+			compatible = "qcom,smb1360-chg-fg";                                                               
+			reg = <0x14>;                                                                                     
+			interrupt-parent = <&msm_gpio>;                                                                   
+			interrupts = <62 8>;                                                                              
+			pinctrl-names = "default";                                                                        
+			pinctrl-0 = <&smb_int_default>;                                                                   
+			qcom,chg-inhibit-disabled;                                                                        
+			qcom,float-voltage-mv = <4350>;                                                                   
+			qcom,iterm-ma = <100>;                                                                            
+			qcom,recharge-thresh-mv = <100>;                                                                  
+			qcom,thermal-mitigation = <1500 700 600 0>;                                                       
+			regulator-name = "smb1360_otg_vreg";                                                              
+		};                                                                                                  
+	};                                                                                                    
+};
+*/
+                                                                                                       
+&pm8916_chg {
+	qcom,vddmax-mv = <4350>;
+	qcom,vddsafe-mv = <4380>;
+	qcom,vinmin-mv = <4470>;
+	qcom,batt-hot-percentage = <35>;
+	qcom,batt-cold-percentage = <70>;
+	qcom,tchg-mins = <360>;
+	status = "okay";
+};
+
+/ {
+	qrd_batterydata: qcom,battery-data {
+		qcom,rpull-up-kohm = <68>;
+		qcom,vref-batt-therm = <1800000>;
+
+		#include "batterydata-wingtech-guangyu-4v35-2300mah.dtsi"
+	};
+};
+
+&pm8916_bms {
+	status = "ok";
+	qcom,battery-data = <&qrd_batterydata>;
+};                                                                                             
+                                                                                           
+/*                                                                                                     
+&usb_otg {                                                                                             
+	qcom,hsusb-otg-mode = <3>;                                                                            
+	qcom,usbid-gpio = <&msm_gpio 110 0>;                                                                  
+	pinctrl-names = "default";                                                                            
+	pinctrl-0 = <&usbid_default>;                                                                         
+	vbus_otg-supply = <&smb1360_otg_supply>;                                                              
+};                                                                                                     
+*/                                                                                                     
+
