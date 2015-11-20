@@ -89,7 +89,7 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	cp arch/arm/configs/msm8916-perf_defconfig .config
 
         # get version from config
-        GETVER=`grep 'Siyah-.*-V' .config |sed 's/Siyah-//g' | sed 's/.*".//g' | sed 's/-J.*//g'`;
+        GETVER=$(grep 'Kernel-.*-V' .config |sed 's/Kernel-//g' | sed 's/.*".//g' | sed 's/-L.*//g');
 	
 	# copy new config
 	cp "$KERNELDIR"/.config "$KERNELDIR"/arch/arm/configs/"$KERNEL_CONFIG_FILE";
@@ -122,20 +122,20 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	stat "$KERNELDIR"/arch/arm/boot/zImage || exit 1;
 
 	# compile the modules, and depmod to create the final zImage
-	echo "Compiling Modules............"
-	time make modules -j ${NR_CPUS} || exit 1
+	#echo "Compiling Modules............"
+	#time make modules -j ${NR_CPUS} || exit 1
 
 	# move the compiled zImage and modules into the READY-KERNEL working directory
-	echo "Move compiled objects........"
+	#echo "Move compiled objects........"
 	
 	# copy all ROOT ramdisk files to ramdisk temp dir.
 	cp -a ../ramdisk/* ../ramdisk-tmp/
 	
-	for i in $(find "$KERNELDIR" -name '*.ko'); do
-		cp -av "$i" ../ramdisk-tmp/lib/modules/;
-	done;
+	#for i in $(find "$KERNELDIR" -name '*.ko'); do
+	#	cp -av "$i" ../ramdisk-tmp/lib/modules/;
+	#done;
 
-	chmod 755 ../ramdisk-tmp/lib/modules/*
+	#chmod 755 ../ramdisk-tmp/lib/modules/*
 
 	# remove empty directory placeholders from tmp-initramfs
 	for i in $(find ../ramdisk-tmp/ -name EMPTY_DIRECTORY); do
@@ -143,20 +143,20 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	done;
 
 	if [ -e "$KERNELDIR"/arch/arm/boot/zImage ]; then
-		cp arch/arm/boot/zImage READY-KERNEL/boot/
+		#cp arch/arm/boot/zImage READY-KERNEL/boot/
 
 		# strip not needed debugs from modules.
-		android-toolchain/bin/arm-eabi-strip --strip-unneeded ../ramdisk-tmp/lib/modules/* 2>/dev/null
-		android-toolchain/bin/arm-eabi-strip --strip-debug ../ramdisk-tmp/lib/modules/* 2>/dev/null
+		#android-toolchain/bin/arm-eabi-strip --strip-unneeded ../ramdisk-tmp/lib/modules/* 2>/dev/null
+		#android-toolchain/bin/arm-eabi-strip --strip-debug ../ramdisk-tmp/lib/modules/* 2>/dev/null
 
 		# create the ramdisk and move it to the output working directory
-		echo "Create ramdisk..............."
-		scripts/mkbootfs ../ramdisk-tmp | gzip > ramdisk.gz 2>/dev/null
-		mv ramdisk.gz READY-KERNEL/boot/
+		#echo "Create ramdisk..............."
+		#scripts/mkbootfs ../ramdisk-tmp | gzip > ramdisk.gz 2>/dev/null
+		#mv ramdisk.gz READY-KERNEL/boot/
 
 		# create the dt.img from the compiled device files, necessary for msm8974 boot images
-		echo "Create dt.img................"
-		./scripts/dtbTool -v -s 2048 -o READY-KERNEL/boot/dt.img arch/arm/boot/dts/
+		#echo "Create dt.img................"
+		#./scripts/dtbTool -v -s 2048 -o READY-KERNEL/boot/dt.img arch/arm/boot/dts/
 
 		if [ "$PYTHON_WAS_3" -eq "1" ]; then
 			rm /usr/bin/python
@@ -168,30 +168,48 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 
 		# build the final boot.img ready for inclusion in flashable zip
 		echo "Build boot.img..............."
-		cp scripts/mkbootimg READY-KERNEL/boot/
-		cd READY-KERNEL/boot/
-		base=0x80000000
-		offset=0x00008000
-		tags_addr=0x80000100
-		cmd_line="androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci"
-		./mkbootimg --kernel zImage --ramdisk ramdisk.gz --cmdline "$cmd_line" --base $base --offset $offset --tags-addr $tags_addr --pagesize 2048 --dt dt.img -o newboot.img
-		mv newboot.img ../boot.img
+		
+		
+		#cp scripts/mkbootimg READY-KERNEL/boot/
+		#cd READY-KERNEL/boot/
+		
+		#kernel="zImage"
+		#ramdisk="ramdisk.gz"
+		#cmdline="'androidboot.hardware=qcom user_debug=31 msm_rtb.filter=0x3F ehci-hcd.park=3 androidboot.bootdevice=7824900.sdhci'"
+		#board=""
+		#base="80000000"
+		#pagesize="2048"
+                #kerneloff="00008000"
+                #ramdiskoff="01000000"
+                #tagsoff="00000100"
+                #secondoff=""
+                #dtb="--dt ../../kk-dtb/kk.dtb"
+
+		#./mkbootimg --kernel zImage --ramdisk ramdisk.gz --cmdline "$cmd_line" --base $base --offset $offset --tags-addr $tags_addr --pagesize 2048 --dt dt.img -o newboot.img
+		
+		#./mkbootimg --kernel "$kernel" --ramdisk "$ramdisk" $second --cmdline "$cmdline" --base $base --pagesize $pagesize --kernel_offset $kerneloff --ramdisk_offset $ramdiskoff $secondoff --tags_offset $tagsoff $dtb -o newboot.img;
+                cp arch/arm/boot/zImage AIK-Linux/split_img/boot.img-zImage
+                cd AIK-Linux
+		./repackimg.sh		
+		mv image-new.img ../READY-KERNEL/boot.img		
+		
+		cd ../READY-KERNEL/		
 
 		# cleanup all temporary working files
 		echo "Post build cleanup..........."
-		cd ..
+		#cd ..
 		rm -rf boot
 
 		# BUMP boot.img with magic key to install on JB/KK bootloader
-		cd ..
-		sh kernel_bump.sh
-		mv READY-KERNEL/boot_bumped.img READY-KERNEL/boot.img
-		echo "Kernel BUMP done!";
-		cd READY-KERNEL/
+		#cd ..
+		#sh kernel_bump.sh
+		#mv READY-KERNEL/boot_bumped.img READY-KERNEL/boot.img
+		#echo "Kernel BUMP done!";
+		#cd READY-KERNEL/
 
 		# create the flashable zip file from the contents of the output directory
 		echo "Make flashable zip..........."
-		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-LG-${GETBRANCH}-PWR-CORE")".zip * >/dev/null
+		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000-PWR-CORE")".zip * >/dev/null
 		stat boot.img
 		rm -f ./*.img
 		cd ..
