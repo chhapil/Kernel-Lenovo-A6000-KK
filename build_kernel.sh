@@ -29,6 +29,7 @@ export PARENT_DIR=`readlink -f ${KERNELDIR}/..`;
 export ARCH=arm;
 export USE_SEC_FIPS_MODE=true;
 export KERNEL_CONFIG=.config;
+KERNEL_CONFIG_FILE=msm8916-perf_defconfig
 
 # build script
 export USER=`whoami`;
@@ -86,7 +87,7 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 
 	# move into the kernel directory and compile the main image
 	echo "Compiling Kernel.............";
-	cp arch/arm/configs/msm8916-perf_defconfig .config
+	cp arch/arm/configs/"$KERNEL_CONFIG_FILE" .config
 
         # get version from config
         GETVER=$(grep 'Kernel-.*-V' .config |sed 's/Kernel-//g' | sed 's/.*".//g' | sed 's/-L.*//g');
@@ -211,6 +212,10 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 		echo "Make flashable zip..........."
 		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000-PWR-CORE")".zip * >/dev/null
 		stat boot.img
+		
+		cp *.zip ../READY-RELEASES/;
+		cp *.img ../READY-RELEASES/;
+		
 		rm -f ./*.img
 		cd ..
 	else
