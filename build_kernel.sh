@@ -210,9 +210,9 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 
 		# create the flashable zip file from the contents of the output directory
 		echo "Make flashable zip..........."
-		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000-PWR-CORE")".zip * >/dev/null
+		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000")".zip * >/dev/null
 		stat boot.img
-		mv boot.img Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000-PWR-CORE")".img
+		mv boot.img Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000")".img
 		
 		cp *.zip ../READY-RELEASES/;
 		cp *.img ../READY-RELEASES/;
