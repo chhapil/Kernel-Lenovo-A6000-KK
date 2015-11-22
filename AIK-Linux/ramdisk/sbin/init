@@ -1,0 +1,745 @@
+#!/sbin/busybox sh
+cd /;
+
+BB=/sbin/busybox
+$BB chmod 6755 /sbin/recovery;
+
+$BB mount -t proc proc /proc;
+$BB mount -t sysfs sysfs /sys;
+if [ -e /sys/devices/virtual/sec/sec_key/set_homekey ]; then
+	echo 102 > /sys/devices/virtual/sec/sec_key/set_homekey;
+fi;
+
+# mount root as rw
+$BB mount -t rootfs -o remount,rw rootfs;
+
+if $BB grep -q bootmode=2 /proc/cmdline; then
+	# recovery mode
+	echo "0" > /proc/sys/kernel/rom_feature_set;
+	$BB cp /res/images/recovery-icon.png /res/images/icon_clockwork.png;
+	$BB cp -a /recovery.rc /init.rc;
+	mknod /dev/block/mmcblk0p1 b 179 1
+	mknod /dev/block/mmcblk0p7 b 179 7
+	mknod /dev/block/mmcblk1p1 b 179 9
+	mknod /dev/block/mmcblk0p9 b 259 1
+	mknod /dev/block/mmcblk0p10 b 259 2
+	mknod /dev/block/mmcblk0p11 b 259 3
+	mknod /dev/block/mmcblk0p12 b 259 4
+	mknod /dev/block/loop0 b 7 0
+	exec /sbin/init.recovery;
+fi;
+
+if $BB grep -q 1 /sys/class/power_supply/battery/batt_lp_charging; then
+	# low power mode
+	echo "0" > /proc/sys/kernel/rom_feature_set;
+	$BB cp /res/images/recovery-icon.png /res/images/icon_clockwork.png;
+	$BB cp -a lpm.rc init.rc;
+	$BB rm init.smdk4210.rc;
+	exec /sbin/init.recovery;
+fi;
+
+# unmount all sdcards before any folder cleaning
+$BB umount -l /sdcard;
+$BB umount -l /extSdCard;
+$BB umount -l /mnt/sdcard;
+$BB umount -l /storage/sdcard0;
+$BB umount -l /storage/sdcard1;
+
+# cleaning and rebuilding the /mnt and sdcards mounts folders
+$BB rm -rf /vendor;
+$BB rm -rf /tmp/*;
+mkdir -p /dev/block;
+mkdir /dev/input;
+mkdir /dev/graphics;
+mkdir -p /mnt/asec;
+mkdir -p /mnt/.lfs;
+mkdir -p /mnt/obb;
+mkdir -p /mnt/secure;
+mkdir -p /mnt/tmp;
+mkdir -p /mnt/tmp2;
+mkdir -p /mnt/.secondrom;
+$BB chmod -R 755 /mnt/;
+chmod 0771 /preload;
+chown system:system /preload;
+$BB chmod -R 777 /storage;
+mknod /dev/graphics/fb0 c 29 0
+mknod /dev/input/event1 c 13 65
+mknod /dev/input/event2 c 13 66
+mknod /dev/input/event8 c 13 72
+mknod /dev/input/event9 c 13 73
+mknod /dev/ashmem c 10 61
+mknod /dev/block/mmcblk0p1 b 179 1
+mknod /dev/block/mmcblk0p7 b 179 7
+mknod /dev/block/mmcblk1p1 b 179 9
+mknod /dev/block/mmcblk0p9 b 259 1
+mknod /dev/block/mmcblk0p10 b 259 2
+mknod /dev/block/mmcblk0p11 b 259 3
+mknod /dev/block/mmcblk0p12 b 259 4
+mknod /dev/block/loop0 b 7 0
+
+# mount /preloaded partition
+$BB mount -t ext4 -o rw /dev/block/mmcblk0p12 /preload;
+
+# prevent from media storage to dig in clockworkmod backup dir
+$BB mount -t vfat /dev/block/mmcblk0p11 /mnt/tmp && ( mkdir -p /mnt/tmp/clockworkmod/blobs/ ) && ( mkdir /mnt/tmp/.secondrom/ ) && ( touch /mnt/tmp/.secondrom/.nomedia ) && ( touch /mnt/tmp/clockworkmod/.nomedia ) && ( touch /mnt/tmp/clockworkmod/blobs/.nomedia );
+
+EXSDCARD()
+{
+	if [ -e /dev/block/mmcblk1p1 ]; then
+		$BB mount -t auto /dev/block/mmcblk1p1 /mnt/tmp2 && ( mkdir -p /mnt/tmp2/clockworkmod/blobs/ ) && ( touch /mnt/tmp2/clockworkmod/.nomedia ) && ( touch /mnt/tmp2/clockworkmod/blobs/.nomedia );
+
+		SDCARD_SIZE=$($BB df | $BB grep /dev/block/mmcblk1p1 | $BB cut -c 23-30)
+		if [ "$SDCARD_SIZE" -lt "1000000" ]; then
+			echo "1" > /tmp/sdcard_size;
+		elif [ "$SDCARD_SIZE" -lt "4000000" ]; then
+			echo "4" > /tmp/sdcard_size;
+		elif [ "$SDCARD_SIZE" -lt "8000000" ]; then
+			echo "8" > /tmp/sdcard_size;
+		elif [ "$SDCARD_SIZE" -lt "16000000" ]; then
+			echo "16" > /tmp/sdcard_size;
+		elif [ "$SDCARD_SIZE" -lt "32000000" ]; then
+			echo "32" > /tmp/sdcard_size;
+		elif [ "$SDCARD_SIZE" -lt "64000000" ]; then
+			echo "64" > /tmp/sdcard_size;
+		fi;
+
+		#umount only the external sd
+		$BB umount -l /mnt/tmp2;
+	else
+		echo "no external sdcard";
+	fi;
+}
+
+NEXTBOOT=0;
+DEFAULTROM=0;
+SECONDROM=1;
+NOBOOTLOGO=0;
+
+# dual boot check and run
+if [ -e /mnt/tmp/.nextboot ]; then
+	NEXTBOOT=$(cat /mnt/tmp/.nextboot);
+	$BB rm -f /mnt/tmp/.nextboot;
+fi;
+if [ -e /mnt/tmp/.defaultrom ]; then
+	DEFAULTROM=$(cat /mnt/tmp/.defaultrom);
+fi;
+
+[ -f /preload/build.prop ] || SECONDROM=0;
+[ -f /mnt/tmp/.secondrom/data.img ] || SECONDROM=0;
+[ -f /mnt/tmp/.secondrom/cache.img ] || SECONDROM=0;
+[ -f /mnt/tmp/.nobootlogo ] && NOBOOTLOGO=1;
+
+if [ "$SECONDROM" -eq "0" ]; then
+	if [ "$NOBOOTLOGO" -eq "0" ]; then
+		/sbin/choose_rom "$SECONDROM";
+	fi;
+else
+	if [ "$NEXTBOOT" -eq "1" ]; then
+		SECONDROM=0;
+	elif [ "$NEXTBOOT" -eq "2" ]; then
+		SECONDROM=1;
+	else
+		if [ "$NOBOOTLOGO" -eq "1" ]; then
+			SECONDROM=$DEFAULTROM;
+
+		elif [ "$DEFAULTROM" -eq "1" ]; then
+			/sbin/choose_rom "$SECONDROM";
+
+			if [ "$?" -eq "1" ]; then
+				SECONDROM=0;
+			else
+				SECONDROM=1;
+			fi;
+		else
+			/sbin/choose_rom $SECONDROM;
+
+			if [ "$?" -eq "1" ]; then
+				SECONDROM=1;
+			else
+				SECONDROM=0;
+			fi;
+		fi;
+	fi;
+fi;
+
+if [ "$SECONDROM" -eq "1" ]; then
+	$BB rm -rf /res/dev;
+	mkdir -p /res/dev;
+	ln -s /mnt/.secondrom/.secondrom/data.img /res/dev/data;
+	ln -s /dev/block/mmcblk0p12 /res/dev/system;
+	ln -s /mnt/.secondrom/.secondrom/cache.img /res/dev/cache;
+	echo "1" > /tmp/sec_rom_boot;
+	echo "0" > /tmp/pri_rom_boot;
+else
+	$BB rm -rf /res/dev;
+	mkdir -p /res/dev;
+	ln -s /dev/block/mmcblk0p10 /res/dev/data;
+	ln -s /dev/block/mmcblk0p9 /res/dev/system;
+	ln -s /dev/block/mmcblk0p7 /res/dev/cache;
+	echo "0" > /tmp/sec_rom_boot;
+	echo "1" > /tmp/pri_rom_boot;
+fi;
+
+#############################
+# Partition global tuning!
+#############################
+
+NEED_CHECK()
+{
+	echo "1" > /tmp/need_check_part;
+}
+
+# dalvik cache clean if asked
+DALVIK_CLEAN()
+{
+	DEVICE_DATA="/res/dev/data";
+	DIR_DATA="/data";
+
+	$BB mount -t ext4 $DEVICE_DATA $DIR_DATA;
+	$BB rm -f $DIR_DATA/dalvik-cache/*;
+	sync;
+	$BB umount $DIR_DATA;
+}
+
+# partition fix by forcing full scan and repair
+PARTITIONS_FIX()
+{
+	DEVICE_DATA="/res/dev/data";
+	LOG_DATA="/log-data";
+
+	DEVICE_CACHE="/res/dev/cache";
+	LOG_CACHE="/log-cache";
+
+	DEVICE_SYSTEM="/res/dev/system";
+	LOG_SYSTEM="/log-system";
+
+	DEVICE_PRELOAD="/dev/block/mmcblk0p12";
+	LOG_PRELOAD="/log-preload";
+
+	# check cache
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_CACHE" >> $LOG_CACHE;
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_CACHE" >> $LOG_CACHE;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_CACHE" >> $LOG_CACHE;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_CACHE" >> $LOG_CACHE;
+
+	# check data
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_DATA" >> $LOG_DATA;
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_DATA" >> $LOG_DATA;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_DATA" >> $LOG_DATA;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_DATA" >> $LOG_DATA;
+
+	# check data
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+
+	# check preload
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+	$BB sh -c "/sbin/e2fsck -fyc $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+	$BB sh -c "/sbin/e2fsck -p $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+}
+
+PARTITION_TUNING()
+{
+	DEVICE_DATA="/res/dev/data";
+	DIR_DATA="/data";
+	LOG_DATA="/log-data";
+	LOG_DATA_TMP="/log-data-tmp";
+
+	DEVICE_CACHE="/res/dev/cache";
+	DIR_CACHE="/cache";
+	LOG_CACHE="/log-cache";
+	LOG_CACHE_TMP="/log-cache-tmp";
+
+	DEVICE_SYSTEM="/res/dev/system";
+	DIR_SYSTEM="/system";
+	LOG_SYSTEM="/log-system";
+	LOG_SYSTEM_TMP="/log-system-tmp";
+
+	DEVICE_PRELOAD="/dev/block/mmcblk0p12";
+	DIR_PRELOAD="/preload";
+	LOG_PRELOAD="/log-preload";
+	LOG_PRELOAD_TMP="/log-preload-tmp";
+
+	# new empty log
+	$BB sh -c "/sbin/date" > $LOG_DATA;
+	$BB sh -c "/sbin/date" > $LOG_CACHE;
+	$BB sh -c "/sbin/date" > $LOG_SYSTEM;
+	$BB sh -c "/sbin/date" > $LOG_PRELOAD;
+
+	# umount
+	$BB umount -l $DIR_DATA;
+	$BB umount -l $DIR_CACHE;
+	$BB umount -l $DIR_SYSTEM;
+	$BB umount -l $DIR_PRELOAD;
+
+	# set fs-feature -> [^]has_journal
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_CACHE | grep 'features' | grep 'has_journal' | wc -l" > $LOG_CACHE_TMP;
+	if [ "$(cat $LOG_CACHE_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O has_journal $DEVICE_CACHE" >> $LOG_CACHE;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_DATA | grep 'features' | grep 'has_journal' | wc -l" > $LOG_DATA_TMP;
+	if [ "$(cat $LOG_DATA_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O has_journal $DEVICE_DATA" >> $LOG_DATA;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_SYSTEM | grep 'features' | grep 'has_journal' | wc -l" > $LOG_SYSTEM_TMP;
+	if [ "$(cat $LOG_SYSTEM_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O has_journal $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_PRELOAD | grep 'features' | grep 'has_journal' | wc -l" > $LOG_PRELOAD_TMP;
+	if [ "$(cat $LOG_PRELOAD_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O has_journal $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+		NEED_CHECK;
+	fi;
+
+	# set fs-feature -> [^]dir_index
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_CACHE | grep 'features' | grep 'dir_index' | wc -l" > $LOG_CACHE_TMP;
+	if [ "$(cat $LOG_CACHE_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O dir_index $DEVICE_CACHE" >> $LOG_CACHE;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_DATA | grep 'features' | grep 'dir_index' | wc -l" > $LOG_DATA_TMP;
+	if [ "$(cat $LOG_DATA_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O dir_index $DEVICE_DATA" >> $LOG_DATA;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_SYSTEM | grep 'features' | grep 'dir_index' | wc -l" > $LOG_SYSTEM_TMP;
+	if [ "$(cat $LOG_SYSTEM_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O dir_index $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_PRELOAD | grep 'features' | grep 'dir_index' | wc -l" > $LOG_PRELOAD_TMP;
+	if [ "$(cat $LOG_PRELOAD_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -O dir_index $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+		NEED_CHECK;
+	fi;
+
+	# check if jornal recover needed
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_CACHE | grep 'state' | grep 'clean' | wc -l" > $LOG_CACHE_TMP;
+	if [ "$(cat $LOG_CACHE_TMP)" -eq "0" ]; then
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_DATA | grep 'state' | grep 'clean' | wc -l" > $LOG_DATA_TMP;
+	if [ "$(cat $LOG_DATA_TMP)" -eq "0" ]; then
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_SYSTEM | grep 'state' | grep 'clean' | wc -l" > $LOG_SYSTEM_TMP;
+	if [ "$(cat $LOG_SYSTEM_TMP)" -eq "0" ]; then
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_PRELOAD | grep 'state' | grep 'clean' | wc -l" > $LOG_PRELOAD_TMP;
+	if [ "$(cat $LOG_PRELOAD_TMP)" -eq "0" ]; then
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l /dev/block/mmcblk0p1 | grep 'state' | grep 'clean' | wc -l" > /tmp/efs_check;
+	if [ "$(cat /tmp/efs_check)" -eq "0" ]; then
+		echo "need" > /tmp/efs_check;
+	fi;
+
+	# set mount option -> [^]journal_data_writeback
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_CACHE | grep 'Default mount options' | grep 'journal_data_writeback' | wc -l" > $LOG_CACHE_TMP;
+	if [ "$(cat $LOG_CACHE_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -o journal_data_writeback $DEVICE_CACHE" >> $LOG_CACHE;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_DATA | grep 'Default mount options' | grep 'journal_data_writeback' | wc -l" > $LOG_DATA_TMP;
+	if [ "$(cat $LOG_DATA_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -o journal_data_writeback $DEVICE_DATA" >> $LOG_DATA;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_SYSTEM | grep 'Default mount options' | grep 'journal_data_writeback' | wc -l" > $LOG_SYSTEM_TMP;
+	if [ "$(cat $LOG_SYSTEM_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -o journal_data_writeback $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+		NEED_CHECK;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_PRELOAD | grep 'Default mount options' | grep 'journal_data_writeback' | wc -l" > $LOG_PRELOAD_TMP;
+	if [ "$(cat $LOG_PRELOAD_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -o journal_data_writeback $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+		NEED_CHECK;
+	fi;
+
+	# set inode to 256
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_CACHE | grep 'Inode size' | grep '256' | wc -l" > $LOG_CACHE_TMP;
+	if [ "$(cat $LOG_CACHE_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -I 256 $DEVICE_CACHE" >> $LOG_CACHE;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_DATA | grep 'Inode size' | grep '256' | wc -l" > $LOG_DATA_TMP;
+	if [ "$(cat $LOG_DATA_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -I 256 $DEVICE_DATA" >> $LOG_DATA;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_SYSTEM | grep 'Inode size' | grep '256' | wc -l" > $LOG_SYSTEM_TMP;
+	if [ "$(cat $LOG_SYSTEM_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -I 256 $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+	fi;
+	$BB sh -c "/sbin/tune2fs -l $DEVICE_PRELOAD | grep 'Inode size' | grep '256' | wc -l" > $LOG_PRELOAD_TMP;
+	if [ "$(cat $LOG_PRELOAD_TMP)" -eq "0" ]; then
+		$BB sh -c "/sbin/tune2fs -I 256 $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+	fi;
+
+	# check 'X2' partitions, if needed
+	if [ "$(cat /tmp/need_check_part)" -eq "1" ]; then
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_CACHE" >> $LOG_CACHE;
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_CACHE" >> $LOG_CACHE;
+
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_DATA" >> $LOG_DATA;
+		DATA_DAMAGED_HARD=$($BB cat $LOG_DATA | $BB grep "RUN fsck MANUALLY" | wc -l);
+		if [ "$DATA_DAMAGED_HARD" -eq "1" ]; then
+			DALVIK_CLEAN;
+			PARTITIONS_FIX;
+		fi;
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_DATA" >> $LOG_DATA;
+
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_SYSTEM" >> $LOG_SYSTEM;
+
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+		$BB sh -c "/sbin/e2fsck -p $DEVICE_PRELOAD" >> $LOG_PRELOAD;
+	fi;
+	if [ "$(cat /tmp/efs_check)" == "need" ]; then
+		$BB sh -c "/sbin/e2fsck -p /dev/block/mmcblk0p1" > /tmp/efs_check;
+		$BB sh -c "/sbin/e2fsck -p /dev/block/mmcblk0p1" >> /tmp/efs_check;
+	fi;
+
+	# only if asked by user via stweaks with dalvik cache clean
+	if [ -e /mnt/tmp/.run_fs_check ]; then
+		# reset the lock-file
+		$BB rm -f /mnt/tmp/.run_fs_check;
+
+		DALVIK_CLEAN;
+
+		# run partition fix by forcing full scan and repair
+		PARTITIONS_FIX;
+	fi;
+
+	# only if set auto via stweaks without dalvik cache clean
+	if [ -e /mnt/tmp/.fix_fs_on_boot_auto ]; then
+		# run partition fix by forcing full scan and repair
+		PARTITIONS_FIX;
+	fi;
+}
+PARTITION_TUNING;
+
+# mounting preloaded partition
+$BB mount -t ext4 -o rw,noauto_da_alloc,journal_async_commit /dev/block/mmcblk0p12 /preload;
+
+# mounting system partition
+$BB mount -t ext4 -o rw,noauto_da_alloc,journal_async_commit /res/dev/system /system;
+
+# fixing second rom partitions
+if [ "$SECONDROM" -eq "1" ]; then
+	SEC_DATA=/mnt/tmp/.secondrom/data.img
+
+	if [ -e "$SEC_DATA" ]; then
+		$BB sh -c "/sbin/tune2fs -l $SEC_DATA | grep 'features' | grep 'has_journal' | wc -l" > /fix_data_log;
+		if [ "$(cat /fix_data_log)" -eq "0" ]; then
+			$BB sh -c "/sbin/tune2fs -O has_journal $SEC_DATA";
+		fi;
+		$BB sh -c "/sbin/tune2fs -l $SEC_DATA | grep 'features' | grep 'dir_index' | wc -l" > /fix_data_log;
+		if [ "$(cat /fix_data_log)" -eq "0" ]; then
+			$BB sh -c "/sbin/tune2fs -O dir_index $SEC_DATA";
+		fi;
+		$BB sh -c "/sbin/tune2fs -l $SEC_DATA | grep 'Default mount options' | grep 'journal_data_writeback' | wc -l" > /fix_data_log;
+		if [ "$(cat /fix_data_log)" -eq "0" ]; then
+			$BB sh -c "/sbin/tune2fs -o journal_data_writeback $SEC_DATA";
+		fi;
+		$BB sh -c "/sbin/tune2fs -l $SEC_DATA | grep 'Inode size' | grep '256' | wc -l" > /fix_data_log;
+		if [ "$(cat /fix_data_log)" -eq "0" ]; then
+			$BB sh -c "/sbin/tune2fs -I 256 $SEC_DATA";
+		fi;
+
+		$BB sh -c "/sbin/e2fsck -p $SEC_DATA" >> /fix_data_log;
+		$BB sh -c "/sbin/e2fsck -p $SEC_DATA" >> /fix_data_log;
+
+		$BB sh -c "/sbin/e2fsck -p /mnt/tmp/.secondrom/cache.img" >> /fix_cache_log;
+		$BB sh -c "/sbin/e2fsck -p /mnt/tmp/.secondrom/cache.img" >> /fix_cache_log;
+	fi;
+fi;
+
+sync;
+# umount /dev/block/mmcblk0p11 internal sdcard
+$BB umount -l /mnt/tmp;
+
+SECROM_FUNCTION_AOSP()
+{
+	# init.rc style JB/CM/AOKP
+	if [ "$SECONDROM" -eq "1" ]; then
+		$BB mv /init.smdk4210.rc.2 /init.smdk4210.rc;
+		if [ -e /fstab.smdk4210.sec ]; then
+			$BB mv /fstab.smdk4210.sec /fstab.smdk4210
+		fi;
+		if [ -e /init.rc.2 ]; then
+			$BB rm /init.rc.2;
+		fi;
+	else
+		$BB rm /init.smdk4210.rc.2;
+		$BB rm /fstab.smdk4210.sec
+		if [ -e /init.rc.2 ]; then
+			$BB rm /init.rc.2;
+		fi;
+	fi;
+}
+
+SECROM_FUNCTION_SAMMY()
+{
+	# init.rc style SAMMY JB
+	if [ "$SECONDROM" -eq "1" ]; then
+		$BB mv /init.smdk4210.rc.2 /init.smdk4210.rc;
+		$BB mv /init.rc.2 /init.rc
+	else
+		$BB rm /init.smdk4210.rc.2;
+		if [ -e /init.rc.2 ]; then
+			$BB rm /init.rc.2;
+		fi;
+	fi;
+}
+
+# linking /system/bin to /bin for crond
+ln -s /system/bin/ /bin
+
+# adding latest vendor binary from 3.6.RC6 kernel for all! tested working great
+mkdir -p /system/vendor/firmware;
+$BB cp -a /res/misc/vendor/firmware/mfc_fw.bin /system/vendor/firmware/mfc_fw.bin;
+$BB chmod 755 /system/vendor/firmware/mfc_fw.bin;
+
+# fix permission to services.jar in case user did a mess, after using my MOD!
+$BB chmod 644 /system/framework/services.jar;
+
+# clean old modules from /system
+if [ ! -d /system/lib/modules ]; then
+        mkdir /system/lib/modules;
+fi;
+cd /lib/modules/;
+for i in *.ko; do
+	rm /system/lib/modules/"$i";
+done;
+cd /;
+
+# move new Kernel modules to /system/lib/modules if possible
+SYSTEM_FREE=$($BB df -h | $BB grep system | $BB cut -d " " -f14 | $BB cut -c 1-3);
+if [ "$SYSTEM_FREE" -le "492" ]; then
+	$BB mv /lib/modules/*.ko /system/lib/modules/;
+	$BB chmod 755 /system/lib/modules/*.ko;
+	$BB ln -s /system/lib/modules/* /lib/modules/;
+	$BB insmod /system/lib/modules/exfat.ko;
+else
+	$BB insmod /lib/modules/exfat.ko;
+fi;
+
+# mount external sdcard
+EXSDCARD;
+
+# one more time set "/" rw just for good sleep
+$BB mount -o remount,rw /;
+
+if [ -f /system/recovery.cpio.gz ]; then
+	$BB zcat /system/recovery.cpio.gz | cpio -idmu;
+fi;
+
+# ROM check init
+CM_AOKP_10_JB=$(find /system/bin/wfd | wc -l);
+CM_AOKP_10_JB=$($BB cat /system/build.prop | $BB grep "ro.build.version.release=4.2" | wc -l);
+CM_AOKP_4_3_JB=$($BB cat /system/build.prop | $BB grep "ro.build.version.release=4.3" | wc -l);
+CM_AOKP_11_KITKAT=$($BB cat /system/build.prop | $BB grep "ro.build.version.release=4.4" | wc -l);
+CM_AOKP_PAC=$(find /system/framework/framework-pac.jar | wc -l);
+CM_AOKP_BAM=$(find /system/framework/framework-bam.jar | wc -l);
+JBSAMMY=$(find /system/lib/libSamsungAnimation.so | wc -l);
+JBSAMMY2=$(find /system/lib/lib_Samsung_Resampler.so | wc -l);
+
+USER_ACTIONS()
+{
+	if [ "$JBSAMMY" -eq "1" ]; then
+		$BB cp -a /sbin/adbd.jb /sbin/adbd;
+		$BB chmod 755 /sbin/adbd;
+	elif [ "$CM_AOKP_4_3_JB" -eq "1" ]; then
+		$BB cp -a /sbin/adbd.cm10.2 /sbin/adbd;
+		$BB chmod 755 /sbin/adbd;
+	elif [ "$CM_AOKP_11_KITKAT" -eq "1" ]; then
+		$BB cp -a /sbin/adbd.cm11 /sbin/adbd;
+		$BB chmod 755 /sbin/adbd;
+	fi;
+
+	# only if asked by user via stweaks
+	if [ -e /system/run_fix_media ]; then
+		# data mount
+		$BB mount -t ext4 /res/dev/data /data;
+
+		mkdir /sdcardtmp;
+		$BB chmod 777 /sdcardtmp;
+		$BB mount -t vfat /dev/block/mmcblk0p11 /sdcardtmp;
+		$BB rm -f /system/run_fix_media;
+
+		if [ -e /sdcardtmp/Android/data/ ]; then
+			$BB rm -rf /sdcardtmp/Android/data/com.cooliris.media;
+			$BB rm -rf /sdcardtmp/Android/data/com.android.gallery3d;
+			$BB rm -rf /sdcardtmp/Android/data/com.google.android.gallery3d;
+			$BB rm -rf /sdcardtmp/Android/data/com.android.providers.media;
+			$BB rm -rf /sdcardtmp/Android/data/com.google.android.music;
+			$BB rm -rf /data/data/com.android.providers.media/databases/*;
+		fi;
+		# sdcard unmount
+		sync;
+		$BB umount -l /sdcardtmp;
+		if [ "$($BB du -h /sdcardtmp | grep 4 | cut -c1-4)" == "4.0K" ]; then
+			$BB rm -rf /sdcardtmp;
+		fi;
+
+		# data unmount
+		$BB umount -l /data;
+	fi;
+}
+
+BOOTROM()
+{
+	USER_ACTIONS;
+	$BB rm -f /sbin/mount;
+	$BB rm -f /sbin/start;
+	$BB chmod -R 777 /tmp/;
+	exec /sbin/init.samsung;
+}
+
+# extract hacked sql
+#$BB xzcat /sql.tar.xz > /sql.tar;
+#$BB tar -xvf /sql.tar;
+#$BB rm /sql.ta*;
+
+POWER_SQL_JB()
+{
+	$BB chmod 644 /system/lib/libsqlite.so;
+	$BB chmod 755 /system/xbin/sqlite3;
+	$BB rm -rf /res/misc/sql/;
+}
+
+POWER_SQL_JB_4_3()
+{
+	$BB cp -a /res/misc/sql/jb-4-3/libsqlite.so /system/lib/libsqlite.so;
+	$BB cp -a /res/misc/sql/jb-4-3/sqlite3 /system/xbin/sqlite3;
+	$BB chmod 644 /system/lib/libsqlite.so;
+	$BB chmod 755 /system/xbin/sqlite3;
+	$BB rm -rf /res/misc/sql/;
+}
+
+POWER_SQL_KITKAT()
+{
+	$BB cp -a /res/misc/sql/kitkat/libsqlite.so /system/lib/libsqlite.so;
+	$BB cp -a /res/misc/sql/kitkat/sqlite3 /system/xbin/sqlite3;
+	$BB chmod 644 /system/lib/libsqlite.so;
+	$BB chmod 755 /system/xbin/sqlite3;
+	$BB rm -rf /res/misc/sql/;
+}
+
+POWER_SAMMY_SQL_JB()
+{
+	$BB chmod 644 /system/lib/libsqlite.so;
+	$BB chmod 755 /system/xbin/sqlite3;
+	$BB rm -rf /res/misc/sql/;
+}
+
+# Kernel check init
+KERNEL_9X=$(cat /proc/version | $BB awk "/V9./ {print $3}" | wc -l);
+KERNEL_10X=$(cat /proc/version | $BB awk "/V10./ {print $3}" | wc -l);
+
+# network tuning reset to allow real ROM control over H/H+/3G/G signal.
+$BB sed -i "s/ro.ril.hsxpa=[0-9]*//g" /system/build.prop;
+$BB sed -i "s/ro.ril.gprsclass=[0-9]*//g" /system/build.prop;
+
+# system dalvik.vm tuning.
+$BB sed -i "s/dalvik.vm.heapsize=[0-9a-zA-Z]*/dalvik.vm.heapsize=128m/g" /system/build.prop;
+$BB sed -i "s/dalvik.vm.heapstartsize=[0-9a-zA-Z]*/dalvik.vm.heapstartsize=5m/g" /system/build.prop;
+$BB sed -i "s/dalvik.vm.heapgrowthlimit=[0-9a-zA-Z]*/dalvik.vm.heapgrowthlimit=48m/g" /system/build.prop;
+$BB sed -i "s/dalvik.vm.heapminfree=[0-9a-zA-Z]*/dalvik.vm.heapminfree=512k/g" /system/build.prop;
+
+# we can OC to 1.5Ghz.
+$BB sed -i "s/ro.device.cpu=Dual-core 1.2GHz ARM Cortex-A9/ro.device.cpu=Dual-core 1.5GHz ARM Cortex-A9/g" /system/build.prop;
+
+# fix perm for init files in /tmp/
+$BB chmod -R 777 /tmp/;
+
+######################################
+# Starting ROM choose and INIT config.
+######################################
+
+# check CLASSPATH files.
+CLEAN_MSIM()
+{
+	$BB sed -i "s/:[/]system[/]framework[/]telephony-msim.jar//g" /init.rc;
+}
+
+if [ "$JBSAMMY" -eq "1" ] || [ "$JBSAMMY2" -eq "1" ]; then
+	if [ "$KERNEL_9X" -eq "1" ] || [ "$KERNEL_10X" -eq "1" ]; then
+		echo "wrong kernel" > /tmp/wrong_kernel;
+	fi;
+	# Injecting JB Modded by Dorimanx, SUPER libsqlite!
+	POWER_SAMMY_SQL_JB;
+	echo "2" > /proc/sys/kernel/rom_feature_set;
+	$BB cp -a /res/misc/JellyB-Sammy/* /;
+	if [ -e /sys/devices/virtual/sec/sec_key/set_homekey ]; then
+		echo "172" > /sys/devices/virtual/sec/sec_key/set_homekey;
+	fi;
+	# for sbin/ext/install.sh and for res/crontab_service/service.sh
+	$BB echo "1" > /tmp/sammy_rom;
+
+	GPIO_KEYS=/system/usr/keylayout/gpio-keys.kl
+	if [ -e $GPIO_KEYS ]; then
+		if grep -q 102 $GPIO_KEYS; then
+			$BB sed -i 's/102/172/g' $GPIO_KEYS;
+		fi;
+	fi;
+
+	SECROM_FUNCTION_AOSP;
+
+elif [ "$CM_AOKP_4_3_JB" -eq "1" ]; then
+	echo "3" > /proc/sys/kernel/rom_feature_set;
+	# Injecting JB Modded by Dorimanx and Fusionjack, SUPER libsqlite!
+	POWER_SQL_JB_4_3;
+	$BB cp -a /res/misc/JellyB-CM-AOKP-10.2/* /;
+	if [ "$CM_AOKP_PAC" -eq "1" ]; then
+		$BB cp -a res/misc/JellyB-CM-AOKP-PAC-4-3/* /;
+	elif [ "$CM_AOKP_BAM" -eq "1" ]; then
+		$BB cp -a res/misc/JellyB-CM-AOKP-BAM-4-3/* /;
+	fi;
+	# for sbin/ext/install.sh
+	echo "1" > /tmp/cm10.2-installed;
+
+	if [ ! -e /system/framework/telephony-msim.jar ]; then
+		CLEAN_MSIM;
+	fi;
+
+	SECROM_FUNCTION_AOSP;
+
+elif [ "$CM_AOKP_11_KITKAT" -eq "1" ]; then
+	echo "3" > /proc/sys/kernel/rom_feature_set;
+	# Injecting KitKat Modded by FusionJack, SUPER libsqlite!
+	POWER_SQL_KITKAT;
+	$BB cp -a /res/misc/KitKat-CM-AOKP-11/* /;
+	if [ "$CM_AOKP_PAC" -eq "1" ]; then
+		$BB cp -a res/misc/KitKat-CM-AOKP-PAC-4-4/* /;
+	elif [ "$CM_AOKP_BAM" -eq "1" ]; then
+		$BB cp -a res/misc/KitKat-CM-AOKP-BAM-4-4/* /;
+	fi;
+	# for sbin/ext/install.sh
+	echo "1" > /tmp/cm10.2-installed;
+	# for sbin/ext/post_init.sh
+	echo "1" > /tmp/cm11-installed;
+
+	SECROM_FUNCTION_AOSP;
+
+elif [ "$CM_AOKP_10_JB" -eq "1" ]; then
+	echo "3" > /proc/sys/kernel/rom_feature_set;
+	# Injecting JB Modded by Dorimanx, SUPER libsqlite!
+	POWER_SQL_JB;
+	$BB cp -a /res/misc/JellyB-CM-AOKP-10.1/* /;
+	# for sbin/ext/install.sh
+	echo "1" > /tmp/cm10.1-installed;
+
+	SECROM_FUNCTION_AOSP;
+else
+	echo "wrong kernel" > /tmp/wrong_kernel;
+fi;
+
+# if found by ROM detector and function finished, boot the detected ROM.
+BOOTROM;
