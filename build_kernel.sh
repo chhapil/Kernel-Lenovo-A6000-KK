@@ -193,6 +193,9 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 		#./mkbootimg --kernel "$kernel" --ramdisk "$ramdisk" $second --cmdline "$cmdline" --base $base --pagesize $pagesize --kernel_offset $kerneloff --ramdisk_offset $ramdiskoff $secondoff --tags_offset $tagsoff $dtb -o newboot.img;
                 cp arch/arm/boot/zImage AIK-Linux/split_img/boot.img-zImage
                 cd AIK-Linux
+                chown -R root:root ramdisk
+		chmod -R 777 ramdisk
+		
 		./repackimg.sh		
 		mv image-new.img ../READY-KERNEL/boot.img		
 		

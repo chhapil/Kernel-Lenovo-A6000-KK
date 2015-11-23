@@ -53,13 +53,11 @@ case $1 in
       bzip2) compext=bz2;;
       lz4) repackcmd="$bin/$arch/lz4 $level -l stdin stdout";;
     esac;
-    cd ramdisk;
-    find . | cpio -H newc -o 2> /dev/null | $repackcmd > ../ramdisk-new.cpio.$compext;
+    $bin/$arch/mkbootfs ramdisk | $repackcmd > ramdisk-new.cpio.$compext;
     if [ ! $? -eq "0" ]; then
       abort;
       exit 1;
-    fi;
-    cd ..;;
+    fi;;
 esac;
 
 echo " ";
