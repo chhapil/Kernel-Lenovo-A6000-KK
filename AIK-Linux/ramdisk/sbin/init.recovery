@@ -1,5 +1,0 @@
-#!/sbin/busybox sh
-
-mv /bootbin /init
-exec /init
-

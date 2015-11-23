@@ -31,8 +31,6 @@ sysclktz 0
 
 loglevel 3
 
-# setup the global environment
-    export PATH /sbin:/vendor/bin:/system/sbin:/system/bin:/system/xbin
 # Backward compatibility
     symlink /system/etc /etc
     symlink /sys/kernel/debug /d
