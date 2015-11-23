@@ -90,7 +90,9 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	cp arch/arm/configs/"$KERNEL_CONFIG_FILE" .config
 
         # get version from config
-        GETVER=$(grep 'Kernel-.*-V' .config |sed 's/Kernel-//g' | sed 's/.*".//g' | sed 's/-L.*//g');
+        GETVER=$(grep 'Kernel-.*-V' .config |sed 's/Kernel-//g' | sed 's/.*".//g' | sed 's/-L.*//g' | tr -d '"');
+        
+        echo "Version from kernel ${GETVER}"
 	
 	# copy new config
 	cp "$KERNELDIR"/.config "$KERNELDIR"/arch/arm/configs/"$KERNEL_CONFIG_FILE";
@@ -210,10 +212,9 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 
 		# create the flashable zip file from the contents of the output directory
 		echo "Make flashable zip..........."
-		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000")".zip * >/dev/null
+		zip -r Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]")".zip * >/dev/null
 		stat boot.img
-
-		mv boot.img Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]-A6000")".img
+		mv boot.img Kernel-"${GETVER}"-KK-"$(date +"[%H-%M]-[%d-%m]")".img
 		
 		cp *.zip ../READY-RELEASES/;
 		cp *.img ../READY-RELEASES/;
