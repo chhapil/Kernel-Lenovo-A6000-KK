@@ -223,6 +223,7 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 		cp *.img ../READY-RELEASES/;
 		
 		rm -f ./*.img
+		rm -f ./*.zip
 		cd ..
 	else
 		if [ "$PYTHON_WAS_3" -eq "1" ]; then
