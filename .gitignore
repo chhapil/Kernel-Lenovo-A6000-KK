@@ -93,5 +93,6 @@ signing_key.x509
 x509.genkey
 
 AIK-Linux/split_img/boot.img-zImage
-READY-KERNEL/
+READY-KERNEL/boot.img
+READY-KERNEL/.config
 READY-RELEASES/
