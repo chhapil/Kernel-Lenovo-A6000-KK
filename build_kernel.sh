@@ -38,6 +38,8 @@ export TMPFILE=`mktemp -t`;
 
 chmod -R 777 /tmp;
 
+all1=$(date +%s.%N)
+
 # system compiler
 # gcc x.x.x
 # export CROSS_COMPILE=$PARENT_DIR/toolchain/bin/arm-none-eabi-;
@@ -235,3 +237,5 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 		echo -e "\e[1;31mKernel STUCK in BUILD! no zImage exist\e[m"
 	fi;
 	
+    all2=$(date +%s.%N)
+    echo "${bldgrn}Total elapsed time: ${txtrst}${grn}$(echo "($all2 - $all1) / 60"|bc ) minutes ($(echo "$all2 - $all1"|bc ) seconds) ${txtrst}"	
