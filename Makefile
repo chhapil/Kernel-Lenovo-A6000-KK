@@ -386,6 +386,8 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -Wno-bool-compare \
+		   -Wno-nonnull \
+		   -Wno-unused-const-variable \
 		   -fno-delete-null-pointer-checks \
 		   -std=gnu89 \
 		   $(KERNEL_FLAGS)
