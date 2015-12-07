@@ -3,7 +3,8 @@
 # 2.) clean the sources                                                     #
 echo "Cleaning kernel now";
 bash ./clean-junk.sh; 
-yes | bash ./clean-kernel.sh;   
+#yes | bash ./clean-kernel.sh;   
+bash ./clean-kernel.sh;   
 
 # 1.) load the ".config"                                                    #
 echo "Loading config file";
