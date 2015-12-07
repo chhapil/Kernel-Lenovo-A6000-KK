@@ -319,6 +319,9 @@ static void xhci_cleanup_msix(struct xhci_hcd *xhci)
 	if (xhci->quirks & XHCI_PLAT)
 		return;
 
+	if (xhci->quirks & XHCI_PLAT)
+		return;
+
 	xhci_free_irq(xhci);
 
 	if (xhci->msix_entries) {
