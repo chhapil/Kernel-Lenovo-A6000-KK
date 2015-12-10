@@ -1,10 +1,8 @@
 #
 # ADDITIONAL_DEFAULT_PROPERTIES
 #
-ro.secure=1
+ro.secure=0
 ro.allow.mock.location=0
 ro.debuggable=0
-ro.adb.secure=1
-persist.sys.strict_op_enable=false
-persist.sys.whitelist=/system/etc/whitelist_appops.xml
-persist.sys.usb.config=none
+persist.sys.usb.config=mass_storage,adb
+ro.adb.secure=0

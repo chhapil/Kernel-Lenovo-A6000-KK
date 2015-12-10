@@ -457,7 +457,6 @@ on property:ro.debuggable=1
 service adbd /sbin/adbd
     class core
     socket adbd stream 660 system system
-    disabled
     seclabel u:r:adbd:s0
 
 # adbd on at boot in emulator
