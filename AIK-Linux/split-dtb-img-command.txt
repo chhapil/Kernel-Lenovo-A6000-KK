@@ -1,0 +1,1 @@
+perl split-img-dtb.py --prefix msm8916- --suffix .dtb --number 4 D00DFEED ../split_img/boot.img-dtb
