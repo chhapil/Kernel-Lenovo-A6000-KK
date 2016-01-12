@@ -84,6 +84,9 @@ asmlinkage void do_page_fault(int datammu, unsigned long esr0, unsigned long ear
 	if (user_mode(__frame))
 		flags |= FAULT_FLAG_USER;
 
+	if (user_mode(__frame))
+		flags |= FAULT_FLAG_USER;
+
 	down_read(&mm->mmap_sem);
 
 	vma = find_vma(mm, ear0);

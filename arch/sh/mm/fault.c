@@ -479,6 +479,11 @@ good_area:
 	if (error_code & FAULT_CODE_WRITE)
 		flags |= FAULT_FLAG_WRITE;
 
+	if (user_mode(regs))
+		flags |= FAULT_FLAG_USER;
+	if (error_code & FAULT_CODE_WRITE)
+		flags |= FAULT_FLAG_WRITE;
+
 	/*
 	 * If for any reason at all we couldn't handle the fault,
 	 * make sure we exit gracefully rather than endlessly redo

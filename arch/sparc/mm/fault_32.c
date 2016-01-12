@@ -239,6 +239,11 @@ good_area:
 	if (write)
 		flags |= FAULT_FLAG_WRITE;
 
+	if (from_user)
+		flags |= FAULT_FLAG_USER;
+	if (write)
+		flags |= FAULT_FLAG_WRITE;
+
 	/*
 	 * If for any reason at all we couldn't handle the fault,
 	 * make sure we exit gracefully rather than endlessly redo

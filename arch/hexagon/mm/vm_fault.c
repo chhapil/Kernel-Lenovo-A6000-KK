@@ -93,6 +93,7 @@ good_area:
 	case FLT_LOAD:
 		if (!(vma->vm_flags & VM_READ))
 			goto bad_area;
+		flags |= FAULT_FLAG_WRITE;
 		break;
 	case FLT_STORE:
 		if (!(vma->vm_flags & VM_WRITE))
