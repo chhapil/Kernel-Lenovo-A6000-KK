@@ -127,20 +127,20 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	stat "$KERNELDIR"/arch/arm/boot/zImage || exit 1;
 
 	# compile the modules, and depmod to create the final zImage
-	#echo "Compiling Modules............"
-	#time make modules -j ${NR_CPUS} || exit 1
+	echo "Compiling Modules............"
+	time make modules -j ${NR_CPUS} || exit 1
 
 	# move the compiled zImage and modules into the READY-KERNEL working directory
-	#echo "Move compiled objects........"
+	echo "Move compiled objects........"
 	
 	# copy all ROOT ramdisk files to ramdisk temp dir.
 	cp -a ../ramdisk/* ../ramdisk-tmp/
 	
-	#for i in $(find "$KERNELDIR" -name '*.ko'); do
-	#	cp -av "$i" ../ramdisk-tmp/lib/modules/;
-	#done;
+	for i in $(find "$KERNELDIR" -name '*.ko'); do
+		cp -av "$i" ../ramdisk-tmp/lib/modules/;
+	done;
 
-	#chmod 755 ../ramdisk-tmp/lib/modules/*
+	chmod 755 ../ramdisk-tmp/lib/modules/*
 
 	# remove empty directory placeholders from tmp-initramfs
 	for i in $(find ../ramdisk-tmp/ -name EMPTY_DIRECTORY); do
@@ -148,14 +148,14 @@ export CROSS_COMPILE=$KERNELDIR/android-toolchain/bin/arm-eabi-;
 	done;
 
 	if [ -e "$KERNELDIR"/arch/arm/boot/zImage ]; then
-		#cp arch/arm/boot/zImage READY-KERNEL/boot/
+		cp arch/arm/boot/zImage READY-KERNEL/boot/
 
 		# strip not needed debugs from modules.
-		#android-toolchain/bin/arm-eabi-strip --strip-unneeded ../ramdisk-tmp/lib/modules/* 2>/dev/null
-		#android-toolchain/bin/arm-eabi-strip --strip-debug ../ramdisk-tmp/lib/modules/* 2>/dev/null
+		android-toolchain/bin/arm-eabi-strip --strip-unneeded ../ramdisk-tmp/lib/modules/* 2>/dev/null
+		android-toolchain/bin/arm-eabi-strip --strip-debug ../ramdisk-tmp/lib/modules/* 2>/dev/null
 
 		# create the ramdisk and move it to the output working directory
-		#echo "Create ramdisk..............."
+		echo "Create ramdisk..............."
 		#scripts/mkbootfs ../ramdisk-tmp | gzip > ramdisk.gz 2>/dev/null
 		#mv ramdisk.gz READY-KERNEL/boot/
 
